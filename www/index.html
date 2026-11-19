@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#17131f">
+  <title>Anjel AI</title>
+  <style>
+    :root{color-scheme:dark;--bg:#17131f;--panel:#211a31;--accent:#9b6cf4;--muted:#c9bdd7}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:#fff;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;height:100dvh;display:flex;flex-direction:column}
+    header{padding:calc(16px + env(safe-area-inset-top)) 16px 14px;text-align:center;background:var(--panel);border-bottom:1px solid #5b3e82}
+    header h1{margin:0;color:#d7b4ff;font-size:24px}
+    header p{margin:4px 0 0;color:var(--muted);font-size:12px}
+    #apiBox{margin:12px;background:var(--panel);padding:14px;border-radius:18px}
+    input{min-width:0;border:1px solid #403451;outline:none;background:var(--bg);color:#fff;padding:13px;border-radius:14px;font-size:16px}
+    input:focus{border-color:var(--accent)}
+    #apiKey{width:100%;margin:10px 0}
+    button{border:0;color:#fff;background:var(--accent);padding:12px;border-radius:14px;font-weight:700;font-size:14px;cursor:pointer}
+    button:disabled{opacity:.6;cursor:wait}
+    #saveKey{width:100%}
+    .hint{font-size:11px;color:var(--muted);line-height:1.5;margin:9px 0 0}
+    .examples{display:flex;gap:8px;overflow-x:auto;padding:0 12px 8px;scrollbar-width:thin}
+    .examples button{white-space:nowrap;background:#302441}
+    #chat{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:12px;overscroll-behavior:contain}
+    .msg{max-width:90%;padding:12px 14px;border-radius:18px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
+    .user{align-self:flex-end;background:#7c3aed;border-bottom-right-radius:5px}
+    .ai{align-self:flex-start;background:var(--panel);border:1px solid #332847;border-bottom-left-radius:5px}
+    .typing{opacity:.75;font-style:italic}
+    .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+    .actions button{padding:9px 11px}
+    .preview{display:none;width:100%;height:360px;background:white;border:0;border-radius:12px;margin-top:12px}
+    #inputArea{display:flex;gap:8px;padding:10px 12px calc(10px + env(safe-area-inset-bottom));background:var(--panel)}
+    #prompt{flex:1;border-radius:24px}
+    #send{width:50px;height:50px;border-radius:50%;font-size:20px;padding:0;flex:none}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>✦ Anjel AI</h1>
+    <p>Seu cantinho criativo para transformar ideias em programas</p>
+  </header>
+
+  <section id="apiBox">
+    <strong>🔑 Chave da Gemini</strong>
+    <input id="apiKey" type="password" placeholder="Cole sua API Key aqui" autocomplete="off" aria-label="Chave da API Gemini">
+    <button id="saveKey" type="button">Salvar e ativar</button>
+    <p class="hint">A chave é guardada neste aparelho. Não a compartilhe nem a publique no GitHub. Para um aplicativo distribuído publicamente, use um backend para proteger a chave.</p>
+  </section>
+
+  <nav class="examples" aria-label="Ideias para começar">
+    <button type="button" data-prompt="Crie um jogo da cobrinha completo">🐍 Jogo da Cobrinha</button>
+    <button type="button" data-prompt="Crie uma calculadora moderna">🧮 Calculadora</button>
+    <button type="button" data-prompt="Crie um site de loja de roupas">👕 Loja</button>
+    <button type="button" data-prompt="Crie um app de lista de tarefas">✅ Tarefas</button>
+    <button type="button" data-prompt="Crie um jogo da memória">🎮 Memória</button>
+  </nav>
+
+  <main id="chat" aria-live="polite">
+    <div class="msg ai">Olá! Eu sou a Anjel AI 🤖✨
+
+Posso ajudar a criar programas. Toque em uma sugestão ou escreva sua ideia. O que vamos criar hoje?</div>
+  </main>
+
+  <form id="inputArea">
+    <input id="prompt" placeholder="Peça um programa..." autocomplete="off" aria-label="Descreva o programa que deseja">
+    <button id="send" type="submit" aria-label="Enviar">➤</button>
+  </form>
+
+  <script>
+    const apiBox = document.getElementById('apiBox');
+    const apiKeyInput = document.getElementById('apiKey');
+    const promptInput = document.getElementById('prompt');
+    const chat = document.getElementById('chat');
+    const sendButton = document.getElementById('send');
+    let apiKey = localStorage.getItem('anjel_key') || '';
+
+    if (apiKey) {
+      apiKeyInput.value = apiKey;
+      apiBox.hidden = true;
+    }
+
+    document.getElementById('saveKey').addEventListener('click', () => {
+      const value = apiKeyInput.value.trim();
+      if (!value) return alert('Cole sua chave da Gemini primeiro.');
+      apiKey = value;
+      localStorage.setItem('anjel_key', apiKey);
+      apiBox.hidden = true;
+      alert('Anjel AI ativada! ✨');
+    });
+
+    document.querySelectorAll('[data-prompt]').forEach(button => {
+      button.addEventListener('click', () => {
+        promptInput.value = button.dataset.prompt;
+        sendMessage();
+      });
+    });
+
+    document.getElementById('inputArea').addEventListener('submit', event => {
+      event.preventDefault();
+      sendMessage();
+    });
+
+    function addMessage(text, className) {
+      const element = document.createElement('div');
+      element.className = 'msg ' + className;
+      element.textContent = text;
+      chat.appendChild(element);
+      chat.scrollTop = chat.scrollHeight;
+      return element;
+    }
+
+    async function sendMessage() {
+      const text = promptInput.value.trim();
+      if (!text || sendButton.disabled) return;
+      if (!apiKey) {
+        apiBox.hidden = false;
+        apiKeyInput.focus();
+        alert('Cole e salve sua chave da Gemini primeiro.');
+        return;
+      }
+
+      addMessage(text, 'user');
+      promptInput.value = '';
+      const loading = addMessage('Anjel AI está criando seu programa… ⏳', 'ai typing');
+      sendButton.disabled = true;
+
+      const instructions = `Você é a Anjel AI, uma assistente que cria programas. Responda em português com uma explicação curta e animada e, em seguida, um único bloco de código HTML completo, dentro de \`\`\`html ... \`\`\`. O código deve funcionar sozinho, ser moderno e usar CSS e JavaScript inline, sem bibliotecas externas. Pedido do usuário: ${text}`;
+
+      try {
+        const response = await fetch(
+          'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-goog-api-key': apiKey
+            },
+            body: JSON.stringify({ contents: [{ parts: [{ text: instructions }] }] })
+          }
+        );
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error?.message || `Erro HTTP ${response.status}`);
+
+        const answer = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Não consegui gerar uma resposta. Tente novamente.';
+        const match = answer.match(/```html\s*([\s\S]*?)```/i);
+        const explanation = match ? answer.replace(match[0], '').trim() : answer;
+        loading.remove();
+        const message = addMessage(explanation || 'Programa criado! ✨', 'ai');
+
+        if (match) {
+          const code = match[1].trim();
+          const actions = document.createElement('div');
+          actions.className = 'actions';
+          const previewButton = document.createElement('button');
+          previewButton.type = 'button';
+          previewButton.textContent = '👀 Ver programa';
+          const downloadButton = document.createElement('button');
+          downloadButton.type = 'button';
+          downloadButton.textContent = '⬇ Baixar HTML';
+          const copyButton = document.createElement('button');
+          copyButton.type = 'button';
+          copyButton.textContent = '📋 Copiar código';
+          const frame = document.createElement('iframe');
+          frame.className = 'preview';
+          frame.title = 'Prévia do programa criado';
+          frame.setAttribute('sandbox', 'allow-scripts');
+          frame.srcdoc = code;
+
+          previewButton.addEventListener('click', () => {
+            frame.style.display = frame.style.display === 'block' ? 'none' : 'block';
+          });
+          downloadButton.addEventListener('click', () => {
+            const url = URL.createObjectURL(new Blob([code], { type: 'text/html' }));
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'programa-anjel-ai.html';
+            link.click();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+          });
+          copyButton.addEventListener('click', async () => {
+            try {
+              await navigator.clipboard.writeText(code);
+              alert('Código copiado! 📋');
+            } catch {
+              alert('Não foi possível copiar. Tente baixar o arquivo HTML.');
+            }
+          });
+          actions.append(previewButton, downloadButton, copyButton);
+          message.append(actions, frame);
+        }
+      } catch (error) {
+        loading.textContent = 'Não consegui gerar o programa: ' + error.message + '. Verifique a internet, sua chave e se o modelo está disponível.';
+      } finally {
+        sendButton.disabled = false;
+        promptInput.focus();
+      }
+    }
+  </script>
+</body>
+</html>
